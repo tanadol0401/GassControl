@@ -271,19 +271,18 @@
   // ====== Sequence Definition ======
   // Field แยกกัน: field6 = ฝา (1=ปิดฝา, 0=เปิดฝา) | field7 = พัดลม (1=เปิด, 0=ปิด) | field8 = ปั๊ม (1=เปิด, 0=ปิด)
   // Logic: ฝาปิด → พัดลม+ปั๊มทำงาน (รวม 30 นาที) → ฝาเปิด → พัดลม+ปั๊มหยุด (รวม 30 นาที) → วนใหม่ ตลอดทั้งวัน
-  // หน่วยเวลาเป็น ms | รูปแบบ: { label, field, value, delayAfter (ms ก่อนขั้นถัดไป) }
-  // เว้น 17 วิ ระหว่างแต่ละคำสั่ง เพื่อให้กลไกขยับเสร็จก่อน และเลี่ยง ThingSpeak rate-limit (ขั้นต่ำ 15 วิ/ครั้ง)
+  // หน่วยเวลาเป็น ms | รูปแบบ: { label, fields: [{field, value}, ...], delayAfter (ms ก่อนขั้นถัดไป) }
+  // ThingSpeak รองรับส่งหลาย field พร้อมกันในคำขอเดียว เลยรวม "พัดลม+ปั๊ม" เป็นคำขอเดียว ให้ยิงพร้อมกันจริงๆ
+  // เว้น 17 วิ ระหว่างคำสั่ง "ขยับฝา" กับ "พัดลม+ปั๊ม" เพื่อให้กลไกฝาขยับเสร็จก่อน และเลี่ยง ThingSpeak rate-limit (ขั้นต่ำ 15 วิ/ครั้ง)
   const CLOSED_PHASE_MIN = 30; // ฝาปิด + พัดลม+ปั๊มทำงาน (นาที)
   const OPEN_PHASE_MIN   = 30; // ฝาเปิด + พัดลม+ปั๊มหยุด (นาที)
-  const GAP_MS = 17000;        // หน่วงระหว่างคำสั่งแต่ละอัน
+  const GAP_MS = 17000;        // หน่วงระหว่างคำสั่งฝากับพัดลม/ปั๊ม
 
   const SEQUENCE = [
-    { label: "🔒 ปิดฝา",                    field: 6, value: 1, delayAfter: GAP_MS },
-    { label: "🌀 เปิดพัดลม (ฝาปิดอยู่)",     field: 7, value: 1, delayAfter: GAP_MS },
-    { label: "💧 เปิดปั๊ม (ฝาปิดอยู่)",      field: 8, value: 1, delayAfter: (CLOSED_PHASE_MIN * 60000) - (2 * GAP_MS) },
-    { label: "🔓 เปิดฝา",                    field: 6, value: 0, delayAfter: GAP_MS },
-    { label: "⏹️ ปิดพัดลม (ฝาเปิดอยู่)",     field: 7, value: 0, delayAfter: GAP_MS },
-    { label: "🚱 ปิดปั๊ม (ฝาเปิดอยู่)",      field: 8, value: 0, delayAfter: (OPEN_PHASE_MIN * 60000) - (2 * GAP_MS) },
+    { label: "🔒 ปิดฝา",                          fields: [{ field: 6, value: 1 }],                          delayAfter: GAP_MS },
+    { label: "🌀💧 เปิดพัดลม+ปั๊มพร้อมกัน (ฝาปิดอยู่)", fields: [{ field: 7, value: 1 }, { field: 8, value: 1 }], delayAfter: (CLOSED_PHASE_MIN * 60000) - GAP_MS },
+    { label: "🔓 เปิดฝา",                          fields: [{ field: 6, value: 0 }],                          delayAfter: GAP_MS },
+    { label: "⏹️🚱 ปิดพัดลม+ปั๊มพร้อมกัน (ฝาเปิดอยู่)", fields: [{ field: 7, value: 0 }, { field: 8, value: 0 }], delayAfter: (OPEN_PHASE_MIN * 60000) - GAP_MS },
   ];
 
   let currentStep = -1;
@@ -292,6 +291,39 @@
   let stepTimeout = null;
   let countdownInterval = null;
   let countdownTarget = 0;
+  let wakeLock = null;
+
+  // ====== Wake Lock: กันจอดับ/หน้าเว็บถูก throttle ระหว่างรัน Sequence ======
+  // หมายเหตุ: ช่วยได้เฉพาะตอนจอยังเปิด/แท็บยัง foreground อยู่ ถ้าล็อกหน้าจอจริงๆ หรือปิดแอปเบราว์เซอร์
+  // มือถือส่วนใหญ่จะ pause JS timer อยู่ดี — ถ้าต้องการความชัวร์ 100% แนะนำใช้ cron-job.org scheduler แทน
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        addLog('🔆 เปิด Wake Lock แล้ว (กันจอดับระหว่างรัน)');
+        wakeLock.addEventListener('release', () => {
+          addLog('⚠️ Wake Lock ถูกปล่อย (จอาจล็อกได้ ระวัง sequence อาจสะดุด)', true);
+        });
+      } else {
+        addLog('⚠️ เบราว์เซอร์นี้ไม่รองรับ Wake Lock — ควรเปิดจอค้างไว้เอง หรือใช้ cron-job.org scheduler แทน', true);
+      }
+    } catch (e) {
+      addLog(`⚠️ ขอ Wake Lock ไม่สำเร็จ: ${e}`, true);
+    }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLock) {
+      wakeLock.release().catch(() => {});
+      wakeLock = null;
+    }
+  }
+
+  document.addEventListener('visibilitychange', async () => {
+    if (running && document.visibilityState === 'visible' && !wakeLock) {
+      await requestWakeLock();
+    }
+  });
 
   window.onload = function() {
     const saved = localStorage.getItem(KEY_STORAGE);
@@ -588,6 +620,7 @@
     document.getElementById("btn-start").style.display = "none";
     document.getElementById("btn-stop").style.display = "block";
     addLog(`▶ เริ่ม Sequence แล้ว (วนลูปตลอดจนกว่าจะกดหยุด) — รอบที่ ${cycleCount}`);
+    await requestWakeLock();
 
     runStep(key);
   }
@@ -609,8 +642,9 @@
 
     setMainStatus(`⏳ รอบที่ ${cycleCount} · ขั้นที่ ${currentStep + 1}/${SEQUENCE.length}: ${step.label}`, "#f5a623");
 
-    // ส่งข้อมูล
-    fetch(`https://api.thingspeak.com/update?api_key=${key}&field${step.field}=${step.value}`)
+    // ส่งข้อมูล (รวมทุก field ของขั้นนี้ไว้ในคำขอเดียว ยิงพร้อมกันจริงๆ)
+    const qs = step.fields.map(f => `field${f.field}=${f.value}`).join('&');
+    fetch(`https://api.thingspeak.com/update?api_key=${key}&${qs}`)
       .then(r => r.text())
       .then(res => {
         if (!running) return; // ผู้ใช้กดหยุดระหว่างรอ fetch
@@ -618,7 +652,7 @@
         if (res === "0") {
           addLog(`❌ [${time}] รอบ ${cycleCount} ขั้นที่ ${currentStep + 1}: ส่งไม่สำเร็จ`, true);
         } else {
-          addLog(`✅ [${time}] รอบ ${cycleCount} ขั้นที่ ${currentStep + 1}: field${step.field}=${step.value} สำเร็จ (Entry: ${res})`);
+          addLog(`✅ [${time}] รอบ ${cycleCount} ขั้นที่ ${currentStep + 1}: ${qs} สำเร็จ (Entry: ${res})`);
         }
         scheduleNextStep(key, step);
       })
@@ -651,6 +685,7 @@
     running = false;
     clearTimeout(stepTimeout);
     clearInterval(countdownInterval);
+    releaseWakeLock();
     document.getElementById("btn-start").style.display = "block";
     document.getElementById("btn-stop").style.display = "none";
     document.getElementById("countdown").innerText = "—";
