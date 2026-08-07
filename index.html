@@ -154,6 +154,8 @@
     .btn-lid-close { background: #6a4fc0; }
     .btn-fan-on    { background: #1a9e4a; }
     .btn-fan-off   { background: #555b63; }
+    .btn-pump-on   { background: #0e9594; }
+    .btn-pump-off  { background: #8a5a2b; }
     #manual-status { font-size: 12px; text-align: center; min-height: 16px; color: #aaa; margin-top: 8px; }
   </style>
 </head>
@@ -190,6 +192,12 @@
       </button>
       <button class="btn-manual btn-fan-off" onclick="sendManual(0, this)">
         <span class="icon">⏹️</span> ปิดพัดลม
+      </button>
+      <button class="btn-manual btn-pump-on" onclick="sendManual(7, this)">
+        <span class="icon">💧</span> เปิดปั๊ม
+      </button>
+      <button class="btn-manual btn-pump-off" onclick="sendManual(2, this)">
+        <span class="icon">🚱</span> ปิดปั๊ม
       </button>
     </div>
     <div id="manual-status">พร้อมส่งคำสั่ง</div>
@@ -244,7 +252,7 @@
     <div id="countdown">—</div>
 
     <!-- Status -->
-    <div id="main-status" style="color:#aaa;">พร้อมทำงาน — ฝาปิด+พัดลมทำงาน 30 นาที / ฝาเปิด+พัดลมหยุด 30 นาที วนตลอดวัน</div>
+    <div id="main-status" style="color:#aaa;">พร้อมทำงาน — ฝาปิด+พัดลม+ปั๊มทำงาน 30 นาที / ฝาเปิด+พัดลม+ปั๊มหยุด 30 นาที วนตลอดวัน</div>
 
     <!-- Timeline -->
     <div class="timeline" id="timeline"></div>
@@ -261,18 +269,20 @@
   const KEY_STORAGE = "ts_write_key";
 
   // ====== Sequence Definition ======
-  // Logic: ฝาปิด → พัดลมทำงาน (รวม 30 นาที) → ฝาเปิด → พัดลมหยุด (รวม 30 นาที) → วนใหม่ ตลอดทั้งวัน
+  // Logic: ฝาปิด → พัดลม+ปั๊มทำงาน (รวม 30 นาที) → ฝาเปิด → พัดลม+ปั๊มหยุด (รวม 30 นาที) → วนใหม่ ตลอดทั้งวัน
   // หน่วยเวลาเป็น ms | รูปแบบ: { label, value (field6), delayAfter (ms ก่อนขั้นถัดไป) }
-  // เว้น 17 วิ ระหว่างคำสั่ง "ขยับฝา" กับ "พัดลม" เพื่อให้กลไกฝาขยับเสร็จก่อน และเลี่ยง ThingSpeak rate-limit (ขั้นต่ำ 15 วิ/ครั้ง)
-  const CLOSED_PHASE_MIN = 30; // ฝาปิด + พัดลมทำงาน (นาที)
-  const OPEN_PHASE_MIN   = 30; // ฝาเปิด + พัดลมหยุด (นาที)
-  const GAP_MS = 17000;        // หน่วงระหว่างคำสั่งฝากับพัดลม
+  // เว้น 17 วิ ระหว่างแต่ละคำสั่ง เพื่อให้กลไกขยับเสร็จก่อน และเลี่ยง ThingSpeak rate-limit (ขั้นต่ำ 15 วิ/ครั้ง)
+  const CLOSED_PHASE_MIN = 30; // ฝาปิด + พัดลม+ปั๊มทำงาน (นาที)
+  const OPEN_PHASE_MIN   = 30; // ฝาเปิด + พัดลม+ปั๊มหยุด (นาที)
+  const GAP_MS = 17000;        // หน่วงระหว่างคำสั่งแต่ละอัน
 
   const SEQUENCE = [
-    { label: "🔒 ปิดฝา",                  value: 1, delayAfter: GAP_MS },
-    { label: "🌀 เปิดพัดลม (ฝาปิดอยู่)",   value: 5, delayAfter: (CLOSED_PHASE_MIN * 60000) - GAP_MS },
-    { label: "🔓 เปิดฝา",                  value: 6, delayAfter: GAP_MS },
-    { label: "⏹️ ปิดพัดลม (ฝาเปิดอยู่)",   value: 0, delayAfter: (OPEN_PHASE_MIN * 60000) - GAP_MS },
+    { label: "🔒 ปิดฝา",                    value: 1, delayAfter: GAP_MS },
+    { label: "🌀 เปิดพัดลม (ฝาปิดอยู่)",     value: 5, delayAfter: GAP_MS },
+    { label: "💧 เปิดปั๊ม (ฝาปิดอยู่)",      value: 7, delayAfter: (CLOSED_PHASE_MIN * 60000) - (2 * GAP_MS) },
+    { label: "🔓 เปิดฝา",                    value: 6, delayAfter: GAP_MS },
+    { label: "⏹️ ปิดพัดลม (ฝาเปิดอยู่)",     value: 0, delayAfter: GAP_MS },
+    { label: "🚱 ปิดปั๊ม (ฝาเปิดอยู่)",      value: 2, delayAfter: (OPEN_PHASE_MIN * 60000) - (2 * GAP_MS) },
   ];
 
   let currentStep = -1;
