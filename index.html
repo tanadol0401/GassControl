@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #181b1f;
+      color: #d8d9da;
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 420px;
+      margin: 0 auto;
+      font-size: 14px;
+    }
+    label { display: block; margin-bottom: 6px; color: #aaa; font-size: 12px; margin-top: 12px; }
+    input {
+      width: 100%;
+      padding: 9px 10px;
+      background: #2c2f35;
+      border: 1px solid #444;
+      color: white;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .key-row { display: flex; gap: 8px; align-items: center; }
+    .key-row input { flex: 1; }
+    .btn-save { padding: 9px 14px; background: #1e6fbf; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+    #key-status { font-size: 11px; color: #f5a623; margin-top: 4px; min-height: 14px; }
+    .divider { border: none; border-top: 1px solid #2c2f35; margin: 16px 0; }
+
+    .card {
+      background: #222426;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .card-title { color: #ff6600; font-weight: bold; font-size: 14px; margin-bottom: 14px; display:flex; justify-content:space-between; align-items:center; }
+    .cycle-badge { background:#2c2f35; color:#f5a623; font-size:11px; padding:3px 8px; border-radius:20px; font-weight:normal; }
+
+    /* Timeline */
+    .timeline {
+      margin-bottom: 16px;
+    }
+    .timeline-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: #2c2f35;
+      border: 1px solid #333;
+      font-size: 12px;
+      transition: all 0.3s;
+    }
+    .timeline-item.active  { background: #1a3d2b; border-color: #1a9e4a; color: #1a9e4a; }
+    .timeline-item.done    { background: #1a2c1a; border-color: #2d6b2d; color: #4caf50; opacity: 0.7; }
+    .timeline-item.waiting { background: #2c2f35; border-color: #333; color: #666; }
+    .t-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #444;
+      flex-shrink: 0;
+    }
+    .timeline-item.active .t-dot  { background: #1a9e4a; }
+    .timeline-item.done   .t-dot  { background: #4caf50; }
+    .t-time { font-weight: bold; min-width: 55px; }
+    .t-action { flex: 1; }
+    .t-status { font-size: 11px; }
+
+    /* Progress bar */
+    .progress-wrap { background: #2c2f35; border-radius: 20px; height: 8px; margin-bottom: 12px; overflow: hidden; }
+    .progress-bar  { height: 100%; background: #ff6600; border-radius: 20px; transition: width 0.5s; width: 0%; }
+
+    /* Buttons */
+    .btn-start {
+      width: 100%; padding: 16px;
+      background: #1a9e4a; color: white;
+      border: none; border-radius: 8px;
+      cursor: pointer; font-size: 16px;
+      font-weight: bold; margin-bottom: 10px;
+    }
+    .btn-start:active { opacity: 0.8; }
+    .btn-stop {
+      width: 100%; padding: 12px;
+      background: #c0392b; color: white;
+      border: none; border-radius: 8px;
+      cursor: pointer; font-size: 14px;
+      font-weight: bold; display: none;
+    }
+    .btn-stop:active { opacity: 0.8; }
+
+    #main-status {
+      text-align: center;
+      font-size: 13px;
+      padding: 10px;
+      border-radius: 6px;
+      min-height: 20px;
+      margin-bottom: 10px;
+    }
+    #countdown {
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      color: #f5a623;
+      min-height: 30px;
+      margin-bottom: 8px;
+    }
+
+    /* Log */
+    .day-btn {
+      flex: 1; min-width: 32px; padding: 7px 4px;
+      border-radius: 4px; border: 1px solid #444;
+      background: #2c2f35; color: #aaa;
+      cursor: pointer; text-align: center; font-size: 11px;
+    }
+    .day-btn.sel { background: #ff6600; color: white; border-color: #ff6600; }
+    .log-box {
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 11px;
+      max-height: 120px;
+      overflow-y: auto;
+      color: #73bf69;
+      font-family: monospace;
+      margin-top: 10px;
+    }
+    .log-err { color: #e74c3c; }
+
+    /* Manual controls */
+    .manual-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+    .btn-manual {
+      padding: 14px 8px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: bold;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: opacity 0.15s;
+    }
+    .btn-manual:active { opacity: 0.75; }
+    .btn-manual span.icon { font-size: 20px; }
+    .btn-lid-open  { background: #1e6fbf; }
+    .btn-lid-close { background: #6a4fc0; }
+    .btn-fan-on    { background: #1a9e4a; }
+    .btn-fan-off   { background: #555b63; }
+    #manual-status { font-size: 12px; text-align: center; min-height: 16px; color: #aaa; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+  <label>🔑 Write API Key</label>
+  <div class="key-row">
+    <input type="text" id="apikey" placeholder="ใส่ Write API Key">
+    <button class="btn-save" onclick="saveKey()">💾 บันทึก</button>
+  </div>
+  <div id="key-status"></div>
+
+  <label style="margin-top:10px;">⏰ cron-job.org API Key</label>
+  <div class="key-row">
+    <input type="text" id="cronjob-key" placeholder="ใส่ cron-job.org API Key">
+    <button class="btn-save" onclick="saveCronKey()">💾 บันทึก</button>
+  </div>
+  <div id="cronjob-key-status" style="font-size:11px;color:#f5a623;margin-top:4px;min-height:14px;"></div>
+
+  <hr class="divider">
+
+  <!-- Manual Control -->
+  <div class="card">
+    <div class="card-title">🕹️ ควบคุมแมนนวล (Field 6)</div>
+    <div class="manual-grid">
+      <button class="btn-manual btn-lid-open" onclick="sendManual(6, this)">
+        <span class="icon">🔓</span> เปิดฝา
+      </button>
+      <button class="btn-manual btn-lid-close" onclick="sendManual(1, this)">
+        <span class="icon">🔒</span> ปิดฝา
+      </button>
+      <button class="btn-manual btn-fan-on" onclick="sendManual(5, this)">
+        <span class="icon">🌀</span> เปิดพัดลม
+      </button>
+      <button class="btn-manual btn-fan-off" onclick="sendManual(0, this)">
+        <span class="icon">⏹️</span> ปิดพัดลม
+      </button>
+    </div>
+    <div id="manual-status">พร้อมส่งคำสั่ง</div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Cronjob Scheduler -->
+  <div class="card">
+    <div class="card-title">☁️ ตั้งเวลาเริ่ม Sequence อัตโนมัติ (cron-job.org)</div>
+
+    <label>เวลาเริ่ม Sequence</label>
+    <input type="time" id="cron-time" value="06:00" style="margin-bottom:10px;color-scheme:dark;">
+
+    <label>วัน</label>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;" id="cron-days">
+      <div class="day-btn sel" data-d="0">อา</div>
+      <div class="day-btn sel" data-d="1">จ</div>
+      <div class="day-btn sel" data-d="2">อ</div>
+      <div class="day-btn sel" data-d="3">พ</div>
+      <div class="day-btn sel" data-d="4">พฤ</div>
+      <div class="day-btn sel" data-d="5">ศ</div>
+      <div class="day-btn sel" data-d="6">ส</div>
+    </div>
+
+    <button onclick="createCronJobs()" style="width:100%;padding:12px;background:#1e6fbf;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:bold;margin-bottom:8px;">
+      ☁️ สร้าง Jobs ใน cron-job.org
+    </button>
+    <button onclick="deleteSavedJobs()" style="width:100%;padding:12px;background:#c0392b;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:bold;margin-bottom:8px;">
+      🗑️ ลบ Jobs ที่สร้างไว้ (ครั้งล่าสุด)
+    </button>
+    <div id="saved-jobs-info" style="font-size:11px;color:#555;text-align:center;margin-bottom:4px;"></div>
+
+    <div id="cron-status" style="font-size:12px;text-align:center;min-height:16px;color:#aaa;"></div>
+    <div class="log-box" id="cron-log" style="margin-top:8px;"><span style="color:#555">รอการสร้าง jobs...</span></div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="card">
+    <div class="card-title">
+      <span>🔄 Sequence Control — Field 6</span>
+      <span class="cycle-badge" id="cycle-badge">รอบที่ 0</span>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <!-- Countdown -->
+    <div id="countdown">—</div>
+
+    <!-- Status -->
+    <div id="main-status" style="color:#aaa;">พร้อมทำงาน — ฝาปิด+พัดลมทำงาน 30 นาที / ฝาเปิด+พัดลมหยุด 30 นาที วนตลอดวัน</div>
+
+    <!-- Timeline -->
+    <div class="timeline" id="timeline"></div>
+
+    <!-- Buttons -->
+    <button class="btn-start" id="btn-start" onclick="startSequence()">▶ เริ่ม Sequence (วนลูป)</button>
+    <button class="btn-stop"  id="btn-stop"  onclick="stopSequence()">⏹ หยุด</button>
+
+    <!-- Log -->
+    <div class="log-box" id="log"><span style="color:#555">รอการทำงาน...</span></div>
+  </div>
+
+<script>
+  const KEY_STORAGE = "ts_write_key";
+
+  // ====== Sequence Definition ======
+  // Logic: ฝาปิด → พัดลมทำงาน (รวม 30 นาที) → ฝาเปิด → พัดลมหยุด (รวม 30 นาที) → วนใหม่ ตลอดทั้งวัน
+  // หน่วยเวลาเป็น ms | รูปแบบ: { label, value (field6), delayAfter (ms ก่อนขั้นถัดไป) }
+  // เว้น 17 วิ ระหว่างคำสั่ง "ขยับฝา" กับ "พัดลม" เพื่อให้กลไกฝาขยับเสร็จก่อน และเลี่ยง ThingSpeak rate-limit (ขั้นต่ำ 15 วิ/ครั้ง)
+  const CLOSED_PHASE_MIN = 30; // ฝาปิด + พัดลมทำงาน (นาที)
+  const OPEN_PHASE_MIN   = 30; // ฝาเปิด + พัดลมหยุด (นาที)
+  const GAP_MS = 17000;        // หน่วงระหว่างคำสั่งฝากับพัดลม
+
+  const SEQUENCE = [
+    { label: "🔒 ปิดฝา",                  value: 1, delayAfter: GAP_MS },
+    { label: "🌀 เปิดพัดลม (ฝาปิดอยู่)",   value: 5, delayAfter: (CLOSED_PHASE_MIN * 60000) - GAP_MS },
+    { label: "🔓 เปิดฝา",                  value: 6, delayAfter: GAP_MS },
+    { label: "⏹️ ปิดพัดลม (ฝาเปิดอยู่)",   value: 0, delayAfter: (OPEN_PHASE_MIN * 60000) - GAP_MS },
+  ];
+
+  let currentStep = -1;
+  let cycleCount = 0;
+  let running = false;
+  let stepTimeout = null;
+  let countdownInterval = null;
+  let countdownTarget = 0;
+
+  window.onload = function() {
+    const saved = localStorage.getItem(KEY_STORAGE);
+    if (saved) {
+      document.getElementById("apikey").value = saved;
+      document.getElementById("key-status").innerText = "✅ ใช้ key ที่บันทึกไว้";
+    }
+    const savedCronKey = localStorage.getItem("cronjob_api_key");
+    if (savedCronKey) {
+      document.getElementById("cronjob-key").value = savedCronKey;
+      document.getElementById("cronjob-key-status").innerText = "✅ ใช้ cron-job Key ที่บันทึกไว้";
+    }
+    // Init day buttons
+    document.querySelectorAll(".day-btn").forEach(btn => {
+      btn.addEventListener("click", () => btn.classList.toggle("sel"));
+    });
+    // แสดงจำนวน job ที่บันทึกไว้
+    const savedJobs = localStorage.getItem("sequence_job_ids");
+    if (savedJobs) {
+      const ids = JSON.parse(savedJobs);
+      document.getElementById("saved-jobs-info").innerText = `💾 มี ${ids.length} Job IDs ที่บันทึกไว้ พร้อมลบ`;
+    }
+    renderTimeline();
+  };
+
+  function saveCronKey() {
+    const key = document.getElementById("cronjob-key").value.trim();
+    if (!key) { document.getElementById("cronjob-key-status").innerText = "❌ กรุณาใส่ key"; return; }
+    localStorage.setItem("cronjob_api_key", key);
+    document.getElementById("cronjob-key-status").innerText = "✅ บันทึก cron-job Key แล้ว";
+  }
+
+  function getCronKey() { return localStorage.getItem("cronjob_api_key") || ""; }
+
+  function getSelectedCronDays() {
+    return [...document.querySelectorAll("#cron-days .day-btn.sel")].map(b => parseInt(b.dataset.d));
+  }
+
+  // คำนวณเวลา UTC จากเวลาไทย (UTC+7)
+  function toUTC(h, m) {
+    return { h: ((h - 7) + 24) % 24, m };
+  }
+
+  async function createCronJob(title, url, utcH, utcM, days) {
+    const cronKey = getCronKey();
+    const wdays = days.length === 7 ? [-1] : days;
+    const body = {
+      job: {
+        url, enabled: true, title,
+        schedule: {
+          timezone: "Asia/Bangkok",
+          expiresAt: 0,
+          hours: [utcH],
+          mdays: [-1],
+          minutes: [utcM],
+          months: [-1],
+          wdays: wdays
+        },
+        requestTimeout: 30,
+        redirectSuccess: true,
+        requestMethod: 0
+      }
+    };
+    try {
+      const res = await fetch("https://api.cron-job.org/jobs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cronKey },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      return data.jobId || false;
+    } catch(e) { return false; }
+  }
+
+  async function createCronJobs() {
+    const tsKey = document.getElementById("apikey").value.trim();
+    const cronKey = getCronKey();
+    const timeVal = document.getElementById("cron-time").value;
+    const days = getSelectedCronDays();
+
+    if (!tsKey)   { setCronStatus("❌ กรุณาใส่ ThingSpeak Write API Key", "#f85149"); return; }
+    if (!cronKey) { setCronStatus("❌ กรุณาใส่ cron-job.org API Key", "#f85149"); return; }
+    if (!timeVal) { setCronStatus("❌ กรุณาเลือกเวลา", "#f85149"); return; }
+    if (days.length === 0) { setCronStatus("❌ กรุณาเลือกอย่างน้อย 1 วัน", "#f85149"); return; }
+
+    const [startH, startM] = timeVal.split(":").map(Number);
+
+    // คำนวณเวลาของแต่ละขั้น (offset เป็นนาที)
+    const steps = [
+      { label: "Sequence เริ่ม: field6=5",    value: 5, offsetMin: 0  },
+      { label: "Sequence นาที 0: field6=6",   value: 6, offsetMin: 1  }, // 5วิ ปัดเป็น 1 นาที
+      { label: "Sequence นาที 1: field6=1",   value: 1, offsetMin: 2  },
+      { label: "Sequence นาที 5: field6=6",   value: 6, offsetMin: 6  },
+      { label: "Sequence นาที 6: field6=1",   value: 1, offsetMin: 7  },
+      { label: "Sequence นาที 10: field6=6",  value: 6, offsetMin: 11 },
+      { label: "Sequence นาที 11: field6=1",  value: 1, offsetMin: 12 },
+      { label: "Sequence นาที 15: field6=6",  value: 6, offsetMin: 16 },
+      { label: "Sequence นาที 16: field6=1",  value: 1, offsetMin: 17 },
+      { label: "Sequence นาที 20: field6=6",  value: 6, offsetMin: 21 },
+      { label: "Sequence นาที 21: field6=1",  value: 1, offsetMin: 22 },
+    ];
+
+    setCronStatus(`⏳ กำลังสร้าง ${steps.length} jobs... (รอ 5 วิ/job ประมาณ ${steps.length * 5} วิ)`, "#f5a623");
+    addCronLog(`⏳ เริ่มสร้าง jobs สำหรับ ${timeVal} น.`);
+
+    let success = 0;
+    let savedJobIds = [];
+    for (const s of steps) {
+      const totalMin = startM + s.offsetMin;
+      const h = (startH + Math.floor(totalMin / 60)) % 24;
+      const m = totalMin % 60;
+      const utc = toUTC(h, m);
+      const url = `https://api.thingspeak.com/update?api_key=${tsKey}&field6=${s.value}`;
+      const jobId = await createCronJob(s.label, url, utc.h, utc.m, days);
+      if (jobId) {
+        addCronLog(`✅ "${s.label}" → ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} น. (ID: ${jobId})`);
+        savedJobIds.push(jobId);
+        success++;
+      } else {
+        addCronLog(`❌ "${s.label}" ไม่สำเร็จ`, true);
+      }
+      await new Promise(r => setTimeout(r, 12000));
+    }
+    // บันทึก Job IDs ลง localStorage
+    if (savedJobIds.length > 0) {
+      localStorage.setItem("sequence_job_ids", JSON.stringify(savedJobIds));
+      document.getElementById("saved-jobs-info").innerText = `💾 บันทึก ${savedJobIds.length} Job IDs ไว้แล้ว`;
+    }
+    setCronStatus(`✅ สร้างสำเร็จ ${success}/${steps.length} jobs — ดูที่ cron-job.org ได้เลย!`, "#73bf69");
+  }
+
+  async function deleteSavedJobs() {
+    const cronKey = getCronKey();
+    if (!cronKey) { setCronStatus("❌ กรุณาใส่ cron-job.org API Key", "#f85149"); return; }
+
+    const savedRaw = localStorage.getItem("sequence_job_ids");
+    if (!savedRaw) {
+      setCronStatus("❌ ไม่พบ Job IDs ที่บันทึกไว้ — กรุณาสร้าง jobs ก่อน", "#f85149");
+      return;
+    }
+
+    const jobIds = JSON.parse(savedRaw);
+    if (jobIds.length === 0) { setCronStatus("❌ ไม่มี Job IDs ที่จะลบ", "#f85149"); return; }
+
+    if (!confirm(`ยืนยันลบ ${jobIds.length} jobs ที่สร้างไว้ครั้งล่าสุด?`)) return;
+
+    setCronStatus(`⏳ กำลังลบ ${jobIds.length} jobs...`, "#f5a623");
+    addCronLog(`🗑️ เริ่มลบ ${jobIds.length} jobs...`);
+
+    let success = 0;
+    for (const jobId of jobIds) {
+      try {
+        const res = await fetch(`https://api.cron-job.org/jobs/${jobId}`, {
+          method: "DELETE",
+          headers: { "Authorization": "Bearer " + cronKey }
+        });
+        if (res.ok) {
+          addCronLog(`✅ ลบ Job ID: ${jobId} สำเร็จ`);
+          success++;
+        } else {
+          addCronLog(`❌ ลบ Job ID: ${jobId} ไม่สำเร็จ (${res.status})`, true);
+        }
+      } catch(e) {
+        addCronLog(`❌ Error Job ID: ${jobId}: ${e}`, true);
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    if (success === jobIds.length) {
+      localStorage.removeItem("sequence_job_ids");
+      document.getElementById("saved-jobs-info").innerText = "";
+      setCronStatus(`✅ ลบสำเร็จทั้งหมด ${success} jobs!`, "#73bf69");
+    } else {
+      setCronStatus(`⚠️ ลบสำเร็จ ${success}/${jobIds.length} jobs`, "#f5a623");
+    }
+    addCronLog(`🗑️ ลบเสร็จ ${success}/${jobIds.length} jobs`);
+  }
+
+  function setCronStatus(msg, color) {
+    const el = document.getElementById("cron-status");
+    el.innerText = msg; el.style.color = color;
+  }
+
+  function addCronLog(msg, isErr = false) {
+    const log = document.getElementById("cron-log");
+    const div = document.createElement("div");
+    div.className = isErr ? "log-err" : "";
+    div.innerText = msg;
+    log.prepend(div);
+    while (log.children.length > 30) log.removeChild(log.lastChild);
+  }
+
+  function saveKey() {
+    const key = document.getElementById("apikey").value.trim();
+    if (!key) { document.getElementById("key-status").innerText = "❌ กรุณาใส่ key"; return; }
+    localStorage.setItem(KEY_STORAGE, key);
+    document.getElementById("key-status").innerText = "✅ บันทึก Key แล้ว";
+  }
+
+  // ====== Manual Control (สำคัญสุด — ถ้า Sequence กำลังวนอยู่ จะหยุดทันทีก่อนส่งคำสั่งแมนนวล) ======
+  async function sendManual(value, btnEl) {
+    const key = document.getElementById("apikey").value.trim();
+    const statusEl = document.getElementById("manual-status");
+    if (!key) { statusEl.innerText = "❌ กรุณาใส่ Write API Key ก่อน"; statusEl.style.color = "#f85149"; return; }
+
+    const label = btnEl.innerText.trim();
+
+    // แมนนวลมี priority สูงสุด: ถ้า sequence กำลังทำงานอยู่ ให้หยุดก่อนเสมอ
+    if (running) {
+      stopSequence(`ถูกแทรกโดยคำสั่งแมนนวล "${label}" — กด ▶ เพื่อเริ่มใหม่`);
+    }
+
+    const originalHTML = btnEl.innerHTML;
+    btnEl.disabled = true;
+    btnEl.style.opacity = "0.6";
+    statusEl.innerText = `⏳ กำลังส่ง "${label}"...`;
+    statusEl.style.color = "#f5a623";
+
+    try {
+      const res = await fetch(`https://api.thingspeak.com/update?api_key=${key}&field6=${value}`);
+      const result = await res.text();
+      const time = new Date().toLocaleTimeString('th-TH');
+      if (result === "0") {
+        statusEl.innerText = `❌ [${time}] ส่ง "${label}" ไม่สำเร็จ`;
+        statusEl.style.color = "#f85149";
+        addLog(`❌ [${time}] แมนนวล: "${label}" ส่งไม่สำเร็จ`, true);
+      } else {
+        statusEl.innerText = `✅ [${time}] ส่ง "${label}" สำเร็จ (Entry: ${result})`;
+        statusEl.style.color = "#73bf69";
+        addLog(`✅ [${time}] แมนนวล: "${label}" สำเร็จ (field6=${value}, Entry: ${result})`);
+      }
+    } catch (e) {
+      statusEl.innerText = `❌ Error: ${e}`;
+      statusEl.style.color = "#f85149";
+      addLog(`❌ แมนนวล "${label}" Error: ${e}`, true);
+    } finally {
+      btnEl.disabled = false;
+      btnEl.style.opacity = "1";
+      btnEl.innerHTML = originalHTML;
+    }
+  }
+
+  function renderTimeline(activeStep = -1) {
+    const tl = document.getElementById("timeline");
+    tl.innerHTML = SEQUENCE.map((s, i) => {
+      let cls = "waiting";
+      let statusTxt = "";
+      if (i < activeStep)  { cls = "done";   statusTxt = "✅ เสร็จ"; }
+      if (i === activeStep){ cls = "active";  statusTxt = "⏳ กำลังทำงาน"; }
+      return `
+        <div class="timeline-item ${cls}" id="tl-${i}">
+          <div class="t-dot"></div>
+          <div class="t-action">${s.label}</div>
+          <div class="t-status">${statusTxt}</div>
+        </div>`;
+    }).join('');
+  }
+
+  function updateProgress(step) {
+    // ความคืบหน้าใน "รอบ" ปัจจุบัน (0-100% ต่อรอบ แล้ว reset ทุกรอบใหม่)
+    const pct = Math.round(((step + 1) / SEQUENCE.length) * 100);
+    document.getElementById("progress-bar").style.width = pct + "%";
+  }
+
+  function updateCycleBadge() {
+    document.getElementById("cycle-badge").innerText = `รอบที่ ${cycleCount}`;
+  }
+
+  function startCountdown(ms) {
+    clearInterval(countdownInterval);
+    countdownTarget = Date.now() + ms;
+    countdownInterval = setInterval(() => {
+      const remaining = countdownTarget - Date.now();
+      if (remaining <= 0) {
+        clearInterval(countdownInterval);
+        document.getElementById("countdown").innerText = "—";
+        return;
+      }
+      const m = Math.floor(remaining / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
+      document.getElementById("countdown").innerText =
+        m > 0 ? `${m} นาที ${s} วินาที` : `${s} วินาที`;
+    }, 500);
+  }
+
+  async function startSequence() {
+    const key = document.getElementById("apikey").value.trim();
+    if (!key) { setMainStatus("❌ กรุณาใส่ Write API Key", "#f85149"); return; }
+
+    running = true;
+    currentStep = 0;
+    cycleCount = 1;
+    updateCycleBadge();
+    document.getElementById("btn-start").style.display = "none";
+    document.getElementById("btn-stop").style.display = "block";
+    addLog(`▶ เริ่ม Sequence แล้ว (วนลูปตลอดจนกว่าจะกดหยุด) — รอบที่ ${cycleCount}`);
+
+    runStep(key);
+  }
+
+  function runStep(key) {
+    if (!running) return;
+
+    // ถ้าทำครบทุกขั้นในรอบนี้แล้ว ให้วนกลับไปขั้นแรก (loop ตลอด)
+    if (currentStep >= SEQUENCE.length) {
+      currentStep = 0;
+      cycleCount++;
+      updateCycleBadge();
+      addLog(`🔁 ครบรอบแล้ว เริ่มรอบใหม่ — รอบที่ ${cycleCount}`);
+    }
+
+    const step = SEQUENCE[currentStep];
+    renderTimeline(currentStep);
+    updateProgress(currentStep);
+
+    setMainStatus(`⏳ รอบที่ ${cycleCount} · ขั้นที่ ${currentStep + 1}/${SEQUENCE.length}: ${step.label}`, "#f5a623");
+
+    // ส่งข้อมูล
+    fetch(`https://api.thingspeak.com/update?api_key=${key}&field6=${step.value}`)
+      .then(r => r.text())
+      .then(res => {
+        if (!running) return; // ผู้ใช้กดหยุดระหว่างรอ fetch
+        const time = new Date().toLocaleTimeString('th-TH');
+        if (res === "0") {
+          addLog(`❌ [${time}] รอบ ${cycleCount} ขั้นที่ ${currentStep + 1}: ส่งไม่สำเร็จ`, true);
+        } else {
+          addLog(`✅ [${time}] รอบ ${cycleCount} ขั้นที่ ${currentStep + 1}: field6=${step.value} สำเร็จ (Entry: ${res})`);
+        }
+        scheduleNextStep(key, step);
+      })
+      .catch(e => {
+        if (!running) return;
+        addLog(`❌ Error: ${e}`, true);
+        // ยังคงไปต่อแม้ error เพื่อให้ loop ไม่ค้าง
+        scheduleNextStep(key, step);
+      });
+  }
+
+  function scheduleNextStep(key, step) {
+    if (!running) return;
+    const isLastInCycle = currentStep === SEQUENCE.length - 1;
+    const nextStep = isLastInCycle ? SEQUENCE[0] : SEQUENCE[currentStep + 1];
+    const delayLabel = step.delayAfter >= 60000
+      ? `${(step.delayAfter / 60000).toFixed(1)} นาที`
+      : `${step.delayAfter / 1000} วินาที`;
+    setMainStatus(`⏳ รอ ${delayLabel} → ${isLastInCycle ? "🔁 วนรอบใหม่: " : ""}${nextStep.label}`, "#f5a623");
+    startCountdown(step.delayAfter);
+
+    stepTimeout = setTimeout(() => {
+      currentStep++;
+      runStep(key);
+    }, step.delayAfter);
+  }
+
+  function stopSequence(reason) {
+    const wasRunning = running;
+    running = false;
+    clearTimeout(stepTimeout);
+    clearInterval(countdownInterval);
+    document.getElementById("btn-start").style.display = "block";
+    document.getElementById("btn-stop").style.display = "none";
+    document.getElementById("countdown").innerText = "—";
+    document.getElementById("progress-bar").style.width = "0%";
+    renderTimeline(-1);
+    if (!wasRunning) return;
+    const msg = reason || `หยุดแล้ว (ทำไปทั้งหมด ${cycleCount} รอบ)`;
+    setMainStatus(`⏹ ${msg}`, "#aaa");
+    addLog(`⏹ Sequence หยุด — ${msg}`);
+    currentStep = -1;
+  }
+
+  function setMainStatus(msg, color) {
+    const el = document.getElementById("main-status");
+    el.innerText = msg;
+    el.style.color = color;
+  }
+
+  function addLog(msg, isErr = false) {
+    const log = document.getElementById("log");
+    const div = document.createElement("div");
+    div.className = isErr ? "log-err" : "";
+    div.innerText = msg;
+    log.prepend(div);
+    while (log.children.length > 50) log.removeChild(log.lastChild);
+  }
+</script>
+</body>
+</html>
