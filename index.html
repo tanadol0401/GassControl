@@ -179,24 +179,24 @@
 
   <!-- Manual Control -->
   <div class="card">
-    <div class="card-title">🕹️ ควบคุมแมนนวล (Field 6)</div>
+    <div class="card-title">🕹️ ควบคุมแมนนวล (ฝา=F6, พัดลม=F7, ปั๊ม=F8)</div>
     <div class="manual-grid">
-      <button class="btn-manual btn-lid-open" onclick="sendManual(6, this)">
+      <button class="btn-manual btn-lid-open" onclick="sendManual(6, 0, this)">
         <span class="icon">🔓</span> เปิดฝา
       </button>
-      <button class="btn-manual btn-lid-close" onclick="sendManual(1, this)">
+      <button class="btn-manual btn-lid-close" onclick="sendManual(6, 1, this)">
         <span class="icon">🔒</span> ปิดฝา
       </button>
-      <button class="btn-manual btn-fan-on" onclick="sendManual(5, this)">
+      <button class="btn-manual btn-fan-on" onclick="sendManual(7, 1, this)">
         <span class="icon">🌀</span> เปิดพัดลม
       </button>
-      <button class="btn-manual btn-fan-off" onclick="sendManual(0, this)">
+      <button class="btn-manual btn-fan-off" onclick="sendManual(7, 0, this)">
         <span class="icon">⏹️</span> ปิดพัดลม
       </button>
-      <button class="btn-manual btn-pump-on" onclick="sendManual(7, this)">
+      <button class="btn-manual btn-pump-on" onclick="sendManual(8, 1, this)">
         <span class="icon">💧</span> เปิดปั๊ม
       </button>
-      <button class="btn-manual btn-pump-off" onclick="sendManual(2, this)">
+      <button class="btn-manual btn-pump-off" onclick="sendManual(8, 0, this)">
         <span class="icon">🚱</span> ปิดปั๊ม
       </button>
     </div>
@@ -239,7 +239,7 @@
 
   <div class="card">
     <div class="card-title">
-      <span>🔄 Sequence Control — Field 6</span>
+      <span>🔄 Sequence Control — ฝา/พัดลม/ปั๊ม</span>
       <span class="cycle-badge" id="cycle-badge">รอบที่ 0</span>
     </div>
 
@@ -269,20 +269,21 @@
   const KEY_STORAGE = "ts_write_key";
 
   // ====== Sequence Definition ======
+  // Field แยกกัน: field6 = ฝา (1=ปิดฝา, 0=เปิดฝา) | field7 = พัดลม (1=เปิด, 0=ปิด) | field8 = ปั๊ม (1=เปิด, 0=ปิด)
   // Logic: ฝาปิด → พัดลม+ปั๊มทำงาน (รวม 30 นาที) → ฝาเปิด → พัดลม+ปั๊มหยุด (รวม 30 นาที) → วนใหม่ ตลอดทั้งวัน
-  // หน่วยเวลาเป็น ms | รูปแบบ: { label, value (field6), delayAfter (ms ก่อนขั้นถัดไป) }
+  // หน่วยเวลาเป็น ms | รูปแบบ: { label, field, value, delayAfter (ms ก่อนขั้นถัดไป) }
   // เว้น 17 วิ ระหว่างแต่ละคำสั่ง เพื่อให้กลไกขยับเสร็จก่อน และเลี่ยง ThingSpeak rate-limit (ขั้นต่ำ 15 วิ/ครั้ง)
   const CLOSED_PHASE_MIN = 30; // ฝาปิด + พัดลม+ปั๊มทำงาน (นาที)
   const OPEN_PHASE_MIN   = 30; // ฝาเปิด + พัดลม+ปั๊มหยุด (นาที)
   const GAP_MS = 17000;        // หน่วงระหว่างคำสั่งแต่ละอัน
 
   const SEQUENCE = [
-    { label: "🔒 ปิดฝา",                    value: 1, delayAfter: GAP_MS },
-    { label: "🌀 เปิดพัดลม (ฝาปิดอยู่)",     value: 5, delayAfter: GAP_MS },
-    { label: "💧 เปิดปั๊ม (ฝาปิดอยู่)",      value: 7, delayAfter: (CLOSED_PHASE_MIN * 60000) - (2 * GAP_MS) },
-    { label: "🔓 เปิดฝา",                    value: 6, delayAfter: GAP_MS },
-    { label: "⏹️ ปิดพัดลม (ฝาเปิดอยู่)",     value: 0, delayAfter: GAP_MS },
-    { label: "🚱 ปิดปั๊ม (ฝาเปิดอยู่)",      value: 2, delayAfter: (OPEN_PHASE_MIN * 60000) - (2 * GAP_MS) },
+    { label: "🔒 ปิดฝา",                    field: 6, value: 1, delayAfter: GAP_MS },
+    { label: "🌀 เปิดพัดลม (ฝาปิดอยู่)",     field: 7, value: 1, delayAfter: GAP_MS },
+    { label: "💧 เปิดปั๊ม (ฝาปิดอยู่)",      field: 8, value: 1, delayAfter: (CLOSED_PHASE_MIN * 60000) - (2 * GAP_MS) },
+    { label: "🔓 เปิดฝา",                    field: 6, value: 0, delayAfter: GAP_MS },
+    { label: "⏹️ ปิดพัดลม (ฝาเปิดอยู่)",     field: 7, value: 0, delayAfter: GAP_MS },
+    { label: "🚱 ปิดปั๊ม (ฝาเปิดอยู่)",      field: 8, value: 0, delayAfter: (OPEN_PHASE_MIN * 60000) - (2 * GAP_MS) },
   ];
 
   let currentStep = -1;
@@ -491,7 +492,7 @@
   }
 
   // ====== Manual Control (สำคัญสุด — ถ้า Sequence กำลังวนอยู่ จะหยุดทันทีก่อนส่งคำสั่งแมนนวล) ======
-  async function sendManual(value, btnEl) {
+  async function sendManual(field, value, btnEl) {
     const key = document.getElementById("apikey").value.trim();
     const statusEl = document.getElementById("manual-status");
     if (!key) { statusEl.innerText = "❌ กรุณาใส่ Write API Key ก่อน"; statusEl.style.color = "#f85149"; return; }
@@ -510,7 +511,7 @@
     statusEl.style.color = "#f5a623";
 
     try {
-      const res = await fetch(`https://api.thingspeak.com/update?api_key=${key}&field6=${value}`);
+      const res = await fetch(`https://api.thingspeak.com/update?api_key=${key}&field${field}=${value}`);
       const result = await res.text();
       const time = new Date().toLocaleTimeString('th-TH');
       if (result === "0") {
@@ -520,7 +521,7 @@
       } else {
         statusEl.innerText = `✅ [${time}] ส่ง "${label}" สำเร็จ (Entry: ${result})`;
         statusEl.style.color = "#73bf69";
-        addLog(`✅ [${time}] แมนนวล: "${label}" สำเร็จ (field6=${value}, Entry: ${result})`);
+        addLog(`✅ [${time}] แมนนวล: "${label}" สำเร็จ (field${field}=${value}, Entry: ${result})`);
       }
     } catch (e) {
       statusEl.innerText = `❌ Error: ${e}`;
@@ -609,7 +610,7 @@
     setMainStatus(`⏳ รอบที่ ${cycleCount} · ขั้นที่ ${currentStep + 1}/${SEQUENCE.length}: ${step.label}`, "#f5a623");
 
     // ส่งข้อมูล
-    fetch(`https://api.thingspeak.com/update?api_key=${key}&field6=${step.value}`)
+    fetch(`https://api.thingspeak.com/update?api_key=${key}&field${step.field}=${step.value}`)
       .then(r => r.text())
       .then(res => {
         if (!running) return; // ผู้ใช้กดหยุดระหว่างรอ fetch
@@ -617,7 +618,7 @@
         if (res === "0") {
           addLog(`❌ [${time}] รอบ ${cycleCount} ขั้นที่ ${currentStep + 1}: ส่งไม่สำเร็จ`, true);
         } else {
-          addLog(`✅ [${time}] รอบ ${cycleCount} ขั้นที่ ${currentStep + 1}: field6=${step.value} สำเร็จ (Entry: ${res})`);
+          addLog(`✅ [${time}] รอบ ${cycleCount} ขั้นที่ ${currentStep + 1}: field${step.field}=${step.value} สำเร็จ (Entry: ${res})`);
         }
         scheduleNextStep(key, step);
       })
