@@ -293,6 +293,21 @@
   let countdownTarget = 0;
   let wakeLock = null;
 
+  // ====== กันรันซ้ำหลายแท็บ/เครื่องพร้อมกัน (สาเหตุหลักที่ทำให้พัดลม/ปั๊มดูเหมือนสลับเปิดปิดผิดจังหวะ) ======
+  const RUN_LOCK_KEY = "sequence_running_heartbeat";
+  let heartbeatInterval = null;
+  function startHeartbeat() {
+    localStorage.setItem(RUN_LOCK_KEY, Date.now().toString());
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(() => {
+      if (running) localStorage.setItem(RUN_LOCK_KEY, Date.now().toString());
+    }, 30000);
+  }
+  function stopHeartbeat() {
+    clearInterval(heartbeatInterval);
+    localStorage.removeItem(RUN_LOCK_KEY);
+  }
+
   // ====== Wake Lock: กันจอดับ/หน้าเว็บถูก throttle ระหว่างรัน Sequence ======
   // หมายเหตุ: ช่วยได้เฉพาะตอนจอยังเปิด/แท็บยัง foreground อยู่ ถ้าล็อกหน้าจอจริงๆ หรือปิดแอปเบราว์เซอร์
   // มือถือส่วนใหญ่จะ pause JS timer อยู่ดี — ถ้าต้องการความชัวร์ 100% แนะนำใช้ cron-job.org scheduler แทน
@@ -534,8 +549,9 @@
     const label = btnEl.innerText.trim();
 
     // แมนนวลมี priority สูงสุด: ถ้า sequence กำลังทำงานอยู่ ให้หยุดก่อนเสมอ
+    // (ไม่ต้องยิง safety-stop เพราะกำลังจะส่งคำสั่งแมนนวลของตัวเองต่อทันทีอยู่แล้ว)
     if (running) {
-      stopSequence(`ถูกแทรกโดยคำสั่งแมนนวล "${label}" — กด ▶ เพื่อเริ่มใหม่`);
+      stopSequence(`ถูกแทรกโดยคำสั่งแมนนวล "${label}" — กด ▶ เพื่อเริ่มใหม่`, false);
     }
 
     const originalHTML = btnEl.innerHTML;
@@ -615,6 +631,18 @@
     const key = document.getElementById("apikey").value.trim();
     if (!key) { setMainStatus("❌ กรุณาใส่ Write API Key", "#f85149"); return; }
 
+    // เช็คว่ามี Sequence กำลังทำงานอยู่แล้วหรือไม่ (จากแท็บ/เครื่องอื่น) — ถ้ามีสองชุดรันพร้อมกัน
+    // คำสั่งจะชนกันทำให้พัดลม/ปั๊มดูเหมือนเปิดปิดสลับไปมาแบบผิดจังหวะ
+    const lastHeartbeat = parseInt(localStorage.getItem(RUN_LOCK_KEY) || "0", 10);
+    if (Date.now() - lastHeartbeat < 90000) {
+      const proceed = confirm(
+        "⚠️ ดูเหมือนมี Sequence กำลังทำงานอยู่แล้ว (อาจเปิดหน้านี้ไว้อีกแท็บ/อีกเครื่อง)\n\n" +
+        "ถ้าเริ่มซ้ำ คำสั่งอาจชนกัน ทำให้พัดลม/ปั๊มเปิดปิดสลับไปมาผิดปกติ\n\n" +
+        "ต้องการเริ่มซ้อนต่อจริงหรือไม่?"
+      );
+      if (!proceed) return;
+    }
+
     running = true;
     currentStep = 0;
     cycleCount = 1;
@@ -623,6 +651,7 @@
     document.getElementById("btn-stop").style.display = "block";
     addLog(`▶ เริ่ม Sequence แล้ว (วนลูปตลอดจนกว่าจะกดหยุด) — รอบที่ ${cycleCount}`);
     await requestWakeLock();
+    startHeartbeat();
 
     runStep(key);
   }
@@ -682,12 +711,13 @@
     }, step.delayAfter);
   }
 
-  function stopSequence(reason) {
+  async function stopSequence(reason, sendSafetyStop = true) {
     const wasRunning = running;
     running = false;
     clearTimeout(stepTimeout);
     clearInterval(countdownInterval);
     releaseWakeLock();
+    stopHeartbeat();
     document.getElementById("btn-start").style.display = "block";
     document.getElementById("btn-stop").style.display = "none";
     document.getElementById("countdown").innerText = "—";
@@ -698,6 +728,28 @@
     setMainStatus(`⏹ ${msg}`, "#aaa");
     addLog(`⏹ Sequence หยุด — ${msg}`);
     currentStep = -1;
+
+    // ====== Safety stop: กดหยุดแล้วสั่งเปิดฝา + ปิดพัดลม + ปิดปั๊ม ทันที (ยิงพร้อมกันคำขอเดียว) ======
+    if (sendSafetyStop) {
+      const key = document.getElementById("apikey").value.trim();
+      if (!key) return;
+      setMainStatus(`⏹ ${msg} — กำลังสั่งเปิดฝา/ปิดพัดลม/ปิดปั๊ม...`, "#f5a623");
+      try {
+        const res = await fetch(`https://api.thingspeak.com/update?api_key=${key}&field6=0&field7=0&field8=0`);
+        const result = await res.text();
+        const time = new Date().toLocaleTimeString('th-TH');
+        if (result === "0") {
+          addLog(`❌ [${time}] Safety stop (เปิดฝา+ปิดพัดลม+ปิดปั๊ม) ไม่สำเร็จ — กรุณาเช็คด้วยปุ่มแมนนวล`, true);
+          setMainStatus(`⏹ ${msg} — ⚠️ safety stop ไม่สำเร็จ กรุณาสั่งแมนนวลซ้ำ`, "#f85149");
+        } else {
+          addLog(`✅ [${time}] Safety stop: เปิดฝา + ปิดพัดลม + ปิดปั๊ม สำเร็จ (Entry: ${result})`);
+          setMainStatus(`⏹ ${msg}`, "#aaa");
+        }
+      } catch (e) {
+        addLog(`❌ Safety stop Error: ${e}`, true);
+        setMainStatus(`⏹ ${msg} — ⚠️ safety stop error กรุณาสั่งแมนนวลซ้ำ`, "#f85149");
+      }
+    }
   }
 
   function setMainStatus(msg, color) {
