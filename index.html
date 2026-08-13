@@ -411,22 +411,24 @@
 
     const [startH, startM] = timeVal.split(":").map(Number);
 
-    // คำนวณเวลาของแต่ละขั้น (offset เป็นนาที)
+    // ===== FIX: ใช้ field6 แค่ 0 (เปิดฝา) กับ 1 (ปิดฝา) ให้ตรงกับ convention เดียวกับ
+    // ส่วน manual control และ SEQUENCE ด้านล่าง (ก่อนหน้านี้มีค่า 5/6 หลุดมาผสม ทำให้กราฟ
+    // ThingSpeak field6 กระโดดขึ้นไปเป็น 5, 6 ซึ่งไม่มีความหมายอะไรกับอุปกรณ์จริง)
+    // สร้าง step แบบ ปิดฝา(1) → เปิดฝา(0) สลับกันทุกๆ 5 นาที เพื่อทดสอบ/เดโมตามช่วงเวลาเดิม
     const steps = [
-      { label: "Sequence เริ่ม: field6=5",    value: 5, offsetMin: 0  },
-      { label: "Sequence นาที 0: field6=6",   value: 6, offsetMin: 1  }, // 5วิ ปัดเป็น 1 นาที
-      { label: "Sequence นาที 1: field6=1",   value: 1, offsetMin: 2  },
-      { label: "Sequence นาที 5: field6=6",   value: 6, offsetMin: 6  },
-      { label: "Sequence นาที 6: field6=1",   value: 1, offsetMin: 7  },
-      { label: "Sequence นาที 10: field6=6",  value: 6, offsetMin: 11 },
-      { label: "Sequence นาที 11: field6=1",  value: 1, offsetMin: 12 },
-      { label: "Sequence นาที 15: field6=6",  value: 6, offsetMin: 16 },
-      { label: "Sequence นาที 16: field6=1",  value: 1, offsetMin: 17 },
-      { label: "Sequence นาที 20: field6=6",  value: 6, offsetMin: 21 },
-      { label: "Sequence นาที 21: field6=1",  value: 1, offsetMin: 22 },
+      { label: "Sequence เริ่ม: ปิดฝา (field6=1)",     value: 1, offsetMin: 0  },
+      { label: "Sequence นาที 1: เปิดฝา (field6=0)",   value: 0, offsetMin: 1  },
+      { label: "Sequence นาที 5: ปิดฝา (field6=1)",    value: 1, offsetMin: 5  },
+      { label: "Sequence นาที 6: เปิดฝา (field6=0)",   value: 0, offsetMin: 6  },
+      { label: "Sequence นาที 10: ปิดฝา (field6=1)",   value: 1, offsetMin: 10 },
+      { label: "Sequence นาที 11: เปิดฝา (field6=0)",  value: 0, offsetMin: 11 },
+      { label: "Sequence นาที 15: ปิดฝา (field6=1)",   value: 1, offsetMin: 15 },
+      { label: "Sequence นาที 16: เปิดฝา (field6=0)",  value: 0, offsetMin: 16 },
+      { label: "Sequence นาที 20: ปิดฝา (field6=1)",   value: 1, offsetMin: 20 },
+      { label: "Sequence นาที 21: เปิดฝา (field6=0)",  value: 0, offsetMin: 21 },
     ];
 
-    setCronStatus(`⏳ กำลังสร้าง ${steps.length} jobs... (รอ 5 วิ/job ประมาณ ${steps.length * 5} วิ)`, "#f5a623");
+    setCronStatus(`⏳ กำลังสร้าง ${steps.length} jobs... (รอ 12 วิ/job ประมาณ ${steps.length * 12} วิ)`, "#f5a623");
     addCronLog(`⏳ เริ่มสร้าง jobs สำหรับ ${timeVal} น.`);
 
     let success = 0;
