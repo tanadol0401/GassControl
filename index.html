@@ -131,6 +131,7 @@
       margin-top: 10px;
     }
     .log-err { color: #e74c3c; }
+    .hint { font-size: 11px; color: #666; margin-top: 4px; }
 
     /* Manual controls */
     .manual-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
@@ -207,10 +208,11 @@
 
   <!-- Cronjob Scheduler -->
   <div class="card">
-    <div class="card-title">☁️ ตั้งเวลาเริ่ม Sequence อัตโนมัติ (cron-job.org)</div>
+    <div class="card-title">☁️ ตั้ง Sequence อัตโนมัติแบบวนทุกชั่วโมง (cron-job.org)</div>
 
-    <label>เวลาเริ่ม Sequence</label>
-    <input type="time" id="cron-time" value="06:00" style="margin-bottom:10px;color-scheme:dark;">
+    <label>นาทีเริ่มของทุกชั่วโมง (เช่น 06:00 = เริ่มที่นาที 00 ของทุก ๆ ชั่วโมง)</label>
+    <input type="time" id="cron-time" value="06:00" style="margin-bottom:4px;color-scheme:dark;">
+    <div class="hint">ใช้แค่ "นาที" ของเวลาที่กรอก เพราะจะวนซ้ำทุกชั่วโมงอัตโนมัติ (เช่น 06:00, 07:00, 08:00 ... ตลอดวัน)</div>
 
     <label>วัน</label>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;" id="cron-days">
@@ -224,7 +226,7 @@
     </div>
 
     <button onclick="createCronJobs()" style="width:100%;padding:12px;background:#1e6fbf;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:bold;margin-bottom:8px;">
-      ☁️ สร้าง Jobs ใน cron-job.org
+      ☁️ สร้าง Jobs วนอัตโนมัติ (ปิดฝา 30 นาที / เปิดฝา 30 นาที ทุกชั่วโมง)
     </button>
     <button onclick="deleteSavedJobs()" style="width:100%;padding:12px;background:#c0392b;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:bold;margin-bottom:8px;">
       🗑️ ลบ Jobs ที่สร้างไว้ (ครั้งล่าสุด)
@@ -268,15 +270,12 @@
 <script>
   const KEY_STORAGE = "ts_write_key";
 
-  // ====== Sequence Definition ======
+  // ====== Sequence Definition (ฝั่งแอป/หน้าเว็บ — ใช้ตอนเปิดหน้าเว็บค้างไว้) ======
   // Field แยกกัน: field6 = ฝา (1=ปิดฝา, 0=เปิดฝา) | field7 = พัดลม (1=เปิด, 0=ปิด) | field8 = ปั๊ม (1=เปิด, 0=ปิด)
   // Logic: ฝาปิด → พัดลม+ปั๊มทำงาน (รวม 30 นาที) → ฝาเปิด → พัดลม+ปั๊มหยุด (รวม 30 นาที) → วนใหม่ ตลอดทั้งวัน
-  // หน่วยเวลาเป็น ms | รูปแบบ: { label, fields: [{field, value}, ...], delayAfter (ms ก่อนขั้นถัดไป) }
-  // ThingSpeak รองรับส่งหลาย field พร้อมกันในคำขอเดียว เลยรวม "พัดลม+ปั๊ม" เป็นคำขอเดียว ให้ยิงพร้อมกันจริงๆ
-  // เว้น 17 วิ ระหว่างคำสั่ง "ขยับฝา" กับ "พัดลม+ปั๊ม" เพื่อให้กลไกฝาขยับเสร็จก่อน และเลี่ยง ThingSpeak rate-limit (ขั้นต่ำ 15 วิ/ครั้ง)
   const CLOSED_PHASE_MIN = 30; // ฝาปิด + พัดลม+ปั๊มทำงาน (นาที)
   const OPEN_PHASE_MIN   = 30; // ฝาเปิด + พัดลม+ปั๊มหยุด (นาที)
-  const GAP_MS = 17000;        // หน่วงระหว่างคำสั่งฝากับพัดลม/ปั๊ม
+  const GAP_MS = 17000;        // หน่วงระหว่างคำสั่งฝากับพัดลม/ปั๊ม (ฝั่งหน้าเว็บ ใช้วินาทีได้)
 
   const SEQUENCE = [
     { label: "🔒 ปิดฝา",                          fields: [{ field: 6, value: 1 }],                          delayAfter: GAP_MS },
@@ -309,8 +308,6 @@
   }
 
   // ====== Wake Lock: กันจอดับ/หน้าเว็บถูก throttle ระหว่างรัน Sequence ======
-  // หมายเหตุ: ช่วยได้เฉพาะตอนจอยังเปิด/แท็บยัง foreground อยู่ ถ้าล็อกหน้าจอจริงๆ หรือปิดแอปเบราว์เซอร์
-  // มือถือส่วนใหญ่จะ pause JS timer อยู่ดี — ถ้าต้องการความชัวร์ 100% แนะนำใช้ cron-job.org scheduler แทน
   async function requestWakeLock() {
     try {
       if ('wakeLock' in navigator) {
@@ -377,12 +374,11 @@
     return [...document.querySelectorAll("#cron-days .day-btn.sel")].map(b => parseInt(b.dataset.d));
   }
 
-  // คำนวณเวลา UTC จากเวลาไทย (UTC+7)
-  function toUTC(h, m) {
-    return { h: ((h - 7) + 24) % 24, m };
-  }
-
-  async function createCronJob(title, url, utcH, utcM, days) {
+  // ====== สร้าง cron job ที่ "วนทุกชั่วโมง" (hours: [-1]) ในนาทีที่กำหนด ======
+  // หมายเหตุ: field "minutes" ไม่ต้องแปลงเป็น UTC เพราะการแปลง timezone ระหว่าง Bangkok (+7) กับ UTC
+  // มีผลแค่กับ "ชั่วโมง" เท่านั้น นาทียังเท่าเดิมเสมอ และในที่นี้เราตั้ง hours เป็น "ทุกชั่วโมง" (-1)
+  // อยู่แล้ว จึงไม่ต้องสนใจเรื่อง offset ชั่วโมงเลย
+  async function createHourlyLoopJob(title, url, minute, days) {
     const cronKey = getCronKey();
     const wdays = days.length === 7 ? [-1] : days;
     const body = {
@@ -391,9 +387,9 @@
         schedule: {
           timezone: "Asia/Bangkok",
           expiresAt: 0,
-          hours: [utcH],
+          hours: [-1],       // ทุกชั่วโมง = วนอัตโนมัติตลอดวัน
           mdays: [-1],
-          minutes: [utcM],
+          minutes: [minute],
           months: [-1],
           wdays: wdays
         },
@@ -424,39 +420,34 @@
     if (!timeVal) { setCronStatus("❌ กรุณาเลือกเวลา", "#f85149"); return; }
     if (days.length === 0) { setCronStatus("❌ กรุณาเลือกอย่างน้อย 1 วัน", "#f85149"); return; }
 
-    const [startH, startM] = timeVal.split(":").map(Number);
+    const cycleTotal = CLOSED_PHASE_MIN + OPEN_PHASE_MIN;
+    if (cycleTotal !== 60) {
+      setCronStatus(`⚠️ รอบรวม (ปิด ${CLOSED_PHASE_MIN} + เปิด ${OPEN_PHASE_MIN}) ต้อง = 60 นาทีพอดี ถึงจะวนทุกชั่วโมงแบบนี้ได้`, "#f85149");
+      return;
+    }
 
-    // ===== FIX: ใช้ field6 แค่ 0 (เปิดฝา) กับ 1 (ปิดฝา) ให้ตรงกับ convention เดียวกับ
-    // ส่วน manual control และ SEQUENCE ด้านล่าง (ก่อนหน้านี้มีค่า 5/6 หลุดมาผสม ทำให้กราฟ
-    // ThingSpeak field6 กระโดดขึ้นไปเป็น 5, 6 ซึ่งไม่มีความหมายอะไรกับอุปกรณ์จริง)
-    // สร้าง step แบบ ปิดฝา(1) → เปิดฝา(0) สลับกันทุกๆ 5 นาที เพื่อทดสอบ/เดโมตามช่วงเวลาเดิม
+    const [, startM] = timeVal.split(":").map(Number); // ใช้แค่ "นาที" พอ เพราะวนทุกชั่วโมงอยู่แล้ว
+    const GAP_MIN = 1; // cron-job.org ละเอียดสุดแค่ระดับนาที เลยเว้น 1 นาทีแทน 17 วิของฝั่งแอป
+
+    // 4 jobs ที่วนทุกชั่วโมง ตรงกับ SEQUENCE จริง: ปิดฝา → (เว้น) เปิดพัดลม+ปั๊ม → ครบ 30 นาที เปิดฝา → (เว้น) ปิดพัดลม+ปั๊ม
     const steps = [
-      { label: "Sequence เริ่ม: ปิดฝา (field6=1)",     value: 1, offsetMin: 0  },
-      { label: "Sequence นาที 1: เปิดฝา (field6=0)",   value: 0, offsetMin: 1  },
-      { label: "Sequence นาที 5: ปิดฝา (field6=1)",    value: 1, offsetMin: 5  },
-      { label: "Sequence นาที 6: เปิดฝา (field6=0)",   value: 0, offsetMin: 6  },
-      { label: "Sequence นาที 10: ปิดฝา (field6=1)",   value: 1, offsetMin: 10 },
-      { label: "Sequence นาที 11: เปิดฝา (field6=0)",  value: 0, offsetMin: 11 },
-      { label: "Sequence นาที 15: ปิดฝา (field6=1)",   value: 1, offsetMin: 15 },
-      { label: "Sequence นาที 16: เปิดฝา (field6=0)",  value: 0, offsetMin: 16 },
-      { label: "Sequence นาที 20: ปิดฝา (field6=1)",   value: 1, offsetMin: 20 },
-      { label: "Sequence นาที 21: เปิดฝา (field6=0)",  value: 0, offsetMin: 21 },
+      { label: "🔒 ปิดฝา (field6=1)",                  qs: "field6=1",           offsetMin: 0 },
+      { label: "🌀💧 เปิดพัดลม+ปั๊ม (field7=1&field8=1)", qs: "field7=1&field8=1", offsetMin: GAP_MIN },
+      { label: "🔓 เปิดฝา (field6=0)",                  qs: "field6=0",           offsetMin: CLOSED_PHASE_MIN },
+      { label: "⏹️🚱 ปิดพัดลม+ปั๊ม (field7=0&field8=0)",  qs: "field7=0&field8=0", offsetMin: CLOSED_PHASE_MIN + GAP_MIN },
     ];
 
-    setCronStatus(`⏳ กำลังสร้าง ${steps.length} jobs... (รอ 12 วิ/job ประมาณ ${steps.length * 12} วิ)`, "#f5a623");
-    addCronLog(`⏳ เริ่มสร้าง jobs สำหรับ ${timeVal} น.`);
+    setCronStatus(`⏳ กำลังสร้าง ${steps.length} jobs (วนทุกชั่วโมง ตลอดวันที่เลือก)...`, "#f5a623");
+    addCronLog(`⏳ เริ่มสร้าง jobs — เริ่มที่นาทีที่ ${startM} ของทุกชั่วโมง`);
 
     let success = 0;
     let savedJobIds = [];
     for (const s of steps) {
-      const totalMin = startM + s.offsetMin;
-      const h = (startH + Math.floor(totalMin / 60)) % 24;
-      const m = totalMin % 60;
-      const utc = toUTC(h, m);
-      const url = `https://api.thingspeak.com/update?api_key=${tsKey}&field6=${s.value}`;
-      const jobId = await createCronJob(s.label, url, utc.h, utc.m, days);
+      const m = (startM + s.offsetMin) % 60;
+      const url = `https://api.thingspeak.com/update?api_key=${tsKey}&${s.qs}`;
+      const jobId = await createHourlyLoopJob(s.label, url, m, days);
       if (jobId) {
-        addCronLog(`✅ "${s.label}" → ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} น. (ID: ${jobId})`);
+        addCronLog(`✅ "${s.label}" → นาทีที่ ${m} ของทุกชั่วโมง (ID: ${jobId})`);
         savedJobIds.push(jobId);
         success++;
       } else {
@@ -464,12 +455,11 @@
       }
       await new Promise(r => setTimeout(r, 12000));
     }
-    // บันทึก Job IDs ลง localStorage
     if (savedJobIds.length > 0) {
       localStorage.setItem("sequence_job_ids", JSON.stringify(savedJobIds));
       document.getElementById("saved-jobs-info").innerText = `💾 บันทึก ${savedJobIds.length} Job IDs ไว้แล้ว`;
     }
-    setCronStatus(`✅ สร้างสำเร็จ ${success}/${steps.length} jobs — ดูที่ cron-job.org ได้เลย!`, "#73bf69");
+    setCronStatus(`✅ สร้างสำเร็จ ${success}/${steps.length} jobs — วนอัตโนมัติทุกชั่วโมงตลอดวันแล้ว!`, "#73bf69");
   }
 
   async function deleteSavedJobs() {
@@ -548,8 +538,6 @@
 
     const label = btnEl.innerText.trim();
 
-    // แมนนวลมี priority สูงสุด: ถ้า sequence กำลังทำงานอยู่ ให้หยุดก่อนเสมอ
-    // (ไม่ต้องยิง safety-stop เพราะกำลังจะส่งคำสั่งแมนนวลของตัวเองต่อทันทีอยู่แล้ว)
     if (running) {
       stopSequence(`ถูกแทรกโดยคำสั่งแมนนวล "${label}" — กด ▶ เพื่อเริ่มใหม่`, false);
     }
@@ -601,7 +589,6 @@
   }
 
   function updateProgress(step) {
-    // ความคืบหน้าใน "รอบ" ปัจจุบัน (0-100% ต่อรอบ แล้ว reset ทุกรอบใหม่)
     const pct = Math.round(((step + 1) / SEQUENCE.length) * 100);
     document.getElementById("progress-bar").style.width = pct + "%";
   }
@@ -631,8 +618,6 @@
     const key = document.getElementById("apikey").value.trim();
     if (!key) { setMainStatus("❌ กรุณาใส่ Write API Key", "#f85149"); return; }
 
-    // เช็คว่ามี Sequence กำลังทำงานอยู่แล้วหรือไม่ (จากแท็บ/เครื่องอื่น) — ถ้ามีสองชุดรันพร้อมกัน
-    // คำสั่งจะชนกันทำให้พัดลม/ปั๊มดูเหมือนเปิดปิดสลับไปมาแบบผิดจังหวะ
     const lastHeartbeat = parseInt(localStorage.getItem(RUN_LOCK_KEY) || "0", 10);
     if (Date.now() - lastHeartbeat < 90000) {
       const proceed = confirm(
@@ -659,7 +644,6 @@
   function runStep(key) {
     if (!running) return;
 
-    // ถ้าทำครบทุกขั้นในรอบนี้แล้ว ให้วนกลับไปขั้นแรก (loop ตลอด)
     if (currentStep >= SEQUENCE.length) {
       currentStep = 0;
       cycleCount++;
@@ -673,12 +657,11 @@
 
     setMainStatus(`⏳ รอบที่ ${cycleCount} · ขั้นที่ ${currentStep + 1}/${SEQUENCE.length}: ${step.label}`, "#f5a623");
 
-    // ส่งข้อมูล (รวมทุก field ของขั้นนี้ไว้ในคำขอเดียว ยิงพร้อมกันจริงๆ)
     const qs = step.fields.map(f => `field${f.field}=${f.value}`).join('&');
     fetch(`https://api.thingspeak.com/update?api_key=${key}&${qs}`)
       .then(r => r.text())
       .then(res => {
-        if (!running) return; // ผู้ใช้กดหยุดระหว่างรอ fetch
+        if (!running) return;
         const time = new Date().toLocaleTimeString('th-TH');
         if (res === "0") {
           addLog(`❌ [${time}] รอบ ${cycleCount} ขั้นที่ ${currentStep + 1}: ส่งไม่สำเร็จ`, true);
@@ -690,7 +673,6 @@
       .catch(e => {
         if (!running) return;
         addLog(`❌ Error: ${e}`, true);
-        // ยังคงไปต่อแม้ error เพื่อให้ loop ไม่ค้าง
         scheduleNextStep(key, step);
       });
   }
@@ -729,7 +711,6 @@
     addLog(`⏹ Sequence หยุด — ${msg}`);
     currentStep = -1;
 
-    // ====== Safety stop: กดหยุดแล้วสั่งเปิดฝา + ปิดพัดลม + ปิดปั๊ม ทันที (ยิงพร้อมกันคำขอเดียว) ======
     if (sendSafetyStop) {
       const key = document.getElementById("apikey").value.trim();
       if (!key) return;
